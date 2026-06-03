@@ -52,8 +52,8 @@ func (s *Service) CreateTransfer(ctx context.Context, req CreateTransferRequest)
 	if fromID == toID {
 		return CreateTransferResponse{}, fmt.Errorf("%w: from_account_id and to_account_id must be different", ErrInvalidRequest)
 	}
-	if req.Amount <= 0 {
-		return CreateTransferResponse{}, fmt.Errorf("%w: amount must be greater than zero", ErrInvalidRequest)
+	if req.AmountCents <= 0 {
+		return CreateTransferResponse{}, fmt.Errorf("%w: amount_cents must be greater than zero", ErrInvalidRequest)
 	}
 
 	txID := uuid.New()
@@ -72,7 +72,7 @@ func (s *Service) CreateTransfer(ctx context.Context, req CreateTransferRequest)
 		ID:            txID,
 		FromAccountID: fromID,
 		ToAccountID:   toID,
-		Amount:        req.Amount,
+		AmountCents:   req.AmountCents,
 		Status:        StatusProcessing,
 	}
 	if err := s.transactions.Create(ctx, tx); err != nil {
@@ -86,7 +86,7 @@ func (s *Service) CreateTransfer(ctx context.Context, req CreateTransferRequest)
 		TransactionID: txID,
 		FromAccountID: fromID,
 		ToAccountID:   toID,
-		Amount:        req.Amount,
+		AmountCents:   req.AmountCents,
 	}
 	if s.producer == nil {
 		return CreateTransferResponse{}, errors.New("producer is not configured")
@@ -143,7 +143,7 @@ func (s *Service) ProcessTransfer(ctx context.Context, event TransferEvent) (Pro
 		return ProcessResult{}, err
 	}
 
-	if from.Balance < tx.Amount {
+	if from.BalanceCents < tx.AmountCents {
 		if err := s.transactions.UpdateStatus(ctx, dbtx, tx.ID, StatusFailed); err != nil {
 			return ProcessResult{}, err
 		}
@@ -153,10 +153,10 @@ func (s *Service) ProcessTransfer(ctx context.Context, event TransferEvent) (Pro
 		return ProcessResult{Status: StatusFailed, Message: ErrInsufficientBalance.Error()}, nil
 	}
 
-	if err := s.accounts.UpdateBalance(ctx, dbtx, from.ID, from.Balance-tx.Amount); err != nil {
+	if err := s.accounts.UpdateBalance(ctx, dbtx, from.ID, from.BalanceCents-tx.AmountCents); err != nil {
 		return ProcessResult{}, err
 	}
-	if err := s.accounts.UpdateBalance(ctx, dbtx, to.ID, to.Balance+tx.Amount); err != nil {
+	if err := s.accounts.UpdateBalance(ctx, dbtx, to.ID, to.BalanceCents+tx.AmountCents); err != nil {
 		return ProcessResult{}, err
 	}
 	if err := s.transactions.UpdateStatus(ctx, dbtx, tx.ID, StatusCompleted); err != nil {

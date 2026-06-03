@@ -7,9 +7,9 @@ import (
 )
 
 type Account struct {
-	ID        uuid.UUID `json:"id"`
-	OwnerName string    `json:"owner_name"`
-	Balance   float64   `json:"balance"`
-	CreatedAt time.Time `json:"created_at,omitempty"`
-	UpdatedAt time.Time `json:"updated_at,omitempty"`
+	ID           uuid.UUID `json:"id"`
+	OwnerName    string    `json:"owner_name"`
+	BalanceCents int64     `json:"balance_cents"`
+	CreatedAt    time.Time `json:"created_at,omitempty"`
+	UpdatedAt    time.Time `json:"updated_at,omitempty"`
 }

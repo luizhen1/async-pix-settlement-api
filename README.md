@@ -2,6 +2,15 @@
 
 Backend em Go que simula uma API de liquidacao assincrona estilo PIX. A API recebe uma ordem de transferencia, grava a transacao como `PROCESSING`, publica um evento no Kafka e responde `202 Accepted`. Um worker separado consome o evento e faz a liquidacao no PostgreSQL com lock, transacao SQL e idempotencia.
 
+## Regra dos centavos
+
+Este projeto nao usa `float32` ou `float64` para dinheiro. Todos os valores monetarios sao armazenados e processados como inteiros em centavos:
+
+- R$ 10,50 = `1050`
+- R$ 100,00 = `10000`
+
+No PostgreSQL, as colunas sao `BIGINT`: `accounts.balance_cents` e `transactions.amount_cents`. Na aplicacao Go, os valores usam `int64`. O endpoint aceita `amount_cents` diretamente e tambem aceita `amount` decimal como string ou numero JSON, convertendo para centavos sem ponto flutuante.
+
 ## Arquitetura
 
 - `cmd/api`: processo HTTP REST.
@@ -42,11 +51,11 @@ O Compose tambem sobe PostgreSQL, Zookeeper, Kafka, cria o topico `pix-transfers
 
 As contas criadas pela migration sao:
 
-| Nome | ID | Saldo |
+| Nome | ID | Saldo em centavos |
 | --- | --- | ---: |
-| Joao | `11111111-1111-1111-1111-111111111111` | `1000.00` |
-| Maria | `22222222-2222-2222-2222-222222222222` | `500.00` |
-| Carlos | `33333333-3333-3333-3333-333333333333` | `250.00` |
+| Joao | `11111111-1111-1111-1111-111111111111` | `100000` |
+| Maria | `22222222-2222-2222-2222-222222222222` | `50000` |
+| Carlos | `33333333-3333-3333-3333-333333333333` | `25000` |
 
 ## Testar a API
 
@@ -64,7 +73,19 @@ curl -X POST http://localhost:8080/transfers \
   -d '{
     "from_account_id": "11111111-1111-1111-1111-111111111111",
     "to_account_id": "22222222-2222-2222-2222-222222222222",
-    "amount": 100.50
+    "amount_cents": 10050
+  }'
+```
+
+Tambem e aceito enviar `amount` decimal; a API converte para centavos sem usar floats:
+
+```bash
+curl -X POST http://localhost:8080/transfers \
+  -H "Content-Type: application/json" \
+  -d '{
+    "from_account_id": "11111111-1111-1111-1111-111111111111",
+    "to_account_id": "22222222-2222-2222-2222-222222222222",
+    "amount": "100.50"
   }'
 ```
 
@@ -91,7 +112,7 @@ Exemplo de resposta depois do worker processar:
   "transaction_id": "uuid",
   "from_account_id": "11111111-1111-1111-1111-111111111111",
   "to_account_id": "22222222-2222-2222-2222-222222222222",
-  "amount": 100.5,
+  "amount_cents": 10050,
   "status": "COMPLETED"
 }
 ```
@@ -115,13 +136,13 @@ docker compose exec postgres psql -U postgres -d pixdb
 Consultar contas:
 
 ```sql
-SELECT id, owner_name, balance FROM accounts ORDER BY owner_name;
+SELECT id, owner_name, balance_cents FROM accounts ORDER BY owner_name;
 ```
 
 Consultar transacoes:
 
 ```sql
-SELECT id, from_account_id, to_account_id, amount, status, created_at, updated_at
+SELECT id, from_account_id, to_account_id, amount_cents, status, created_at, updated_at
 FROM transactions
 ORDER BY created_at DESC;
 ```

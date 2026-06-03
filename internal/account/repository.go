@@ -15,7 +15,7 @@ type Repository interface {
 	Exists(ctx context.Context, id uuid.UUID) (bool, error)
 	List(ctx context.Context) ([]Account, error)
 	GetManyForUpdate(ctx context.Context, tx pgx.Tx, fromID, toID uuid.UUID) (Account, Account, error)
-	UpdateBalance(ctx context.Context, tx pgx.Tx, id uuid.UUID, balance float64) error
+	UpdateBalance(ctx context.Context, tx pgx.Tx, id uuid.UUID, balanceCents int64) error
 }
 
 type PostgresRepository struct {
@@ -34,7 +34,7 @@ func (r *PostgresRepository) Exists(ctx context.Context, id uuid.UUID) (bool, er
 
 func (r *PostgresRepository) List(ctx context.Context) ([]Account, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT id, owner_name, balance::float8, created_at, updated_at
+		SELECT id, owner_name, balance_cents, created_at, updated_at
 		FROM accounts
 		ORDER BY owner_name
 	`)
@@ -46,7 +46,7 @@ func (r *PostgresRepository) List(ctx context.Context) ([]Account, error) {
 	accounts := make([]Account, 0)
 	for rows.Next() {
 		var account Account
-		if err := rows.Scan(&account.ID, &account.OwnerName, &account.Balance, &account.CreatedAt, &account.UpdatedAt); err != nil {
+		if err := rows.Scan(&account.ID, &account.OwnerName, &account.BalanceCents, &account.CreatedAt, &account.UpdatedAt); err != nil {
 			return nil, err
 		}
 		accounts = append(accounts, account)
@@ -57,7 +57,7 @@ func (r *PostgresRepository) List(ctx context.Context) ([]Account, error) {
 
 func (r *PostgresRepository) GetManyForUpdate(ctx context.Context, tx pgx.Tx, fromID, toID uuid.UUID) (Account, Account, error) {
 	rows, err := tx.Query(ctx, `
-		SELECT id, owner_name, balance::float8, created_at, updated_at
+		SELECT id, owner_name, balance_cents, created_at, updated_at
 		FROM accounts
 		WHERE id = $1 OR id = $2
 		ORDER BY id
@@ -71,7 +71,7 @@ func (r *PostgresRepository) GetManyForUpdate(ctx context.Context, tx pgx.Tx, fr
 	accounts := make(map[uuid.UUID]Account, 2)
 	for rows.Next() {
 		var account Account
-		if err := rows.Scan(&account.ID, &account.OwnerName, &account.Balance, &account.CreatedAt, &account.UpdatedAt); err != nil {
+		if err := rows.Scan(&account.ID, &account.OwnerName, &account.BalanceCents, &account.CreatedAt, &account.UpdatedAt); err != nil {
 			return Account{}, Account{}, err
 		}
 		accounts[account.ID] = account
@@ -92,12 +92,12 @@ func (r *PostgresRepository) GetManyForUpdate(ctx context.Context, tx pgx.Tx, fr
 	return from, to, nil
 }
 
-func (r *PostgresRepository) UpdateBalance(ctx context.Context, tx pgx.Tx, id uuid.UUID, balance float64) error {
+func (r *PostgresRepository) UpdateBalance(ctx context.Context, tx pgx.Tx, id uuid.UUID, balanceCents int64) error {
 	commandTag, err := tx.Exec(ctx, `
 		UPDATE accounts
-		SET balance = $2, updated_at = now()
+		SET balance_cents = $2, updated_at = now()
 		WHERE id = $1
-	`, id, balance)
+	`, id, balanceCents)
 	if err != nil {
 		return err
 	}

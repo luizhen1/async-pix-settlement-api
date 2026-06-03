@@ -18,7 +18,7 @@ type Transaction struct {
 	ID            uuid.UUID `json:"transaction_id"`
 	FromAccountID uuid.UUID `json:"from_account_id"`
 	ToAccountID   uuid.UUID `json:"to_account_id"`
-	Amount        float64   `json:"amount"`
+	AmountCents   int64     `json:"amount_cents"`
 	Status        Status    `json:"status"`
 	CreatedAt     time.Time `json:"created_at,omitempty"`
 	UpdatedAt     time.Time `json:"updated_at,omitempty"`
